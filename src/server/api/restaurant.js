@@ -7,9 +7,18 @@ const MULTIPLE_QUERY_AND = 1;
 const MULTIPLE_QUERY_OR = 2;
 const MULTIPLE_QUERY_TIME = 3;
 
+const SUNDAY = 0;
+const MONDAY = 1;
+const TUESDAY = 2;
+const WEDENSDAY = 3;
+const THURSDAY = 4;
+const FRIDAY = 5;
+const SATURDAY = 6;
+
 const { TIME_ZONE, DEFAULT_DATE } = process.env;
 
-const timeToInt = (timeFromString, timeToString) => {
+const timeToInt = timeString => {
+  const [timeFromString, timeToString] = timeString.split('-');
   const momentTimeFrom = moment.tz(
     `${DEFAULT_DATE} ${timeFromString}`,
     'YYYY/MM/DD HH:mm',
@@ -34,22 +43,118 @@ const timeToInt = (timeFromString, timeToString) => {
   };
 };
 
+const adjustOutputResult = result => {
+  let outputResult = [];
+
+  outputResult = result.map(restaurant => {
+    let sunday = 'Closed';
+    let monday = 'Closed';
+    let tuesday = 'Closed';
+    let wednesday = 'Closed';
+    let thursday = 'Closed';
+    let friday = 'Closed';
+    let saturday = 'Closed';
+
+    if (restaurant.sun_from !== -1 && restaurant.sun_to !== -1) {
+      sunday = `${moment
+        .tz(restaurant.sun_from * 1000, TIME_ZONE)
+        .format('HH:mm')}-${moment
+        .tz(restaurant.sun_to * 1000, TIME_ZONE)
+        .format('HH:mm')}`;
+    }
+
+    if (restaurant.mon_from !== -1 && restaurant.mon_to !== -1) {
+      monday = `${moment
+        .tz(restaurant.mon_from * 1000, TIME_ZONE)
+        .format('HH:mm')}-${moment
+        .tz(restaurant.mon_to * 1000, TIME_ZONE)
+        .format('HH:mm')}`;
+    }
+
+    if (restaurant.tue_from !== -1 && restaurant.tue_to !== -1) {
+      tuesday = `${moment
+        .tz(restaurant.tue_from * 1000, TIME_ZONE)
+        .format('HH:mm')}-${moment
+        .tz(restaurant.tue_to * 1000, TIME_ZONE)
+        .format('HH:mm')}`;
+    }
+
+    if (restaurant.wed_from !== -1 && restaurant.wed_to !== -1) {
+      wednesday = `${moment
+        .tz(restaurant.wed_from * 1000, TIME_ZONE)
+        .format('HH:mm')}-${moment
+        .tz(restaurant.wed_to * 1000, TIME_ZONE)
+        .format('HH:mm')}`;
+    }
+
+    if (restaurant.thur_from !== -1 && restaurant.thur_to !== -1) {
+      thursday = `${moment
+        .tz(restaurant.thur_from * 1000, TIME_ZONE)
+        .format('HH:mm')}-${moment
+        .tz(restaurant.thur_to * 1000, TIME_ZONE)
+        .format('HH:mm')}`;
+    }
+
+    if (restaurant.fri_from !== -1 && restaurant.fri_to !== -1) {
+      friday = `${moment
+        .tz(restaurant.fri_from * 1000, TIME_ZONE)
+        .format('HH:mm')}-${moment
+        .tz(restaurant.fri_to * 1000, TIME_ZONE)
+        .format('HH:mm')}`;
+    }
+
+    if (restaurant.sat_from !== -1 && restaurant.sat_to !== -1) {
+      saturday = `${moment
+        .tz(restaurant.sat_from * 1000, TIME_ZONE)
+        .format('HH:mm')}-${moment
+        .tz(restaurant.sat_to * 1000, TIME_ZONE)
+        .format('HH:mm')}`;
+    }
+
+    return {
+      restaurant_id: restaurant.restaurant_id,
+      restaurant_name: restaurant.restaurant_name,
+      parking: restaurant.parking,
+      delivery: restaurant.delivery,
+      deposit: restaurant.deposit,
+      evaluation: restaurant.evaluation,
+      longitude: restaurant.position.x,
+      latitude: restaurant.position.y,
+      menu_type: restaurant.menu_type,
+      michelin_star: restaurant.michelin_star,
+      sunday,
+      monday,
+      tuesday,
+      wednesday,
+      thursday,
+      friday,
+      saturday,
+    };
+  });
+
+  return outputResult;
+};
+
 const getRestaurant = async (req, res) => {
   const {
-    queryType,
-    menuType,
+    query_type: queryType,
+    menu_type: menuType,
     deposit,
     parking,
     delivery,
     latitude,
     longitude,
+    weekday,
+    time_from: timeFrom,
+    time_to: timeTo,
     offset = 0,
     limit = 10,
   } = req.query;
   let sql = 'SELECT * FROM restaurant';
   const params = [];
 
-  console.log(queryType);
+  console.log('the params', req.query);
+
   if (parseInt(queryType, 10) === SINGLE_QUERY) {
     if (
       menuType !== undefined &&
@@ -82,6 +187,29 @@ const getRestaurant = async (req, res) => {
     } else if (longitude !== undefined) {
       sql = `${sql} WHERE ST_Y(position) >= ?`;
       params.push(longitude);
+    } else if (
+      weekday !== undefined &&
+      parseInt(weekday, 10) >= 0 &&
+      parseInt(weekday, 10) <= 6
+    ) {
+      if (parseInt(weekday, 10) === SUNDAY) {
+        sql = `${sql} WHERE sun_from != ? AND sun_to != ?`;
+      } else if (parseInt(weekday, 10) === MONDAY) {
+        sql = `${sql} WHERE mon_from != ? AND mon_to != ?`;
+      } else if (parseInt(weekday, 10) === TUESDAY) {
+        sql = `${sql} WHERE tue_from != ? AND tue_to != ?`;
+      } else if (parseInt(weekday, 10) === WEDENSDAY) {
+        sql = `${sql} WHERE wed_from != ? AND wed_to != ?`;
+      } else if (parseInt(weekday, 10) === THURSDAY) {
+        sql = `${sql} WHERE thur_from != ? AND thur_to != ?`;
+      } else if (parseInt(weekday, 10) === FRIDAY) {
+        sql = `${sql} WHERE fri_from != ? AND fri_to != ?`;
+      } else if (parseInt(weekday, 10) === SATURDAY) {
+        sql = `${sql} WHERE sat_from != ? AND sat_to != ?`;
+      }
+
+      params.push(-1);
+      params.push(-1);
     } else {
       res.json({ code: -1, message: 'Please give at least one condition' });
 
@@ -162,12 +290,71 @@ const getRestaurant = async (req, res) => {
       params.push(longitude);
     }
 
+    if (
+      weekday !== undefined &&
+      parseInt(weekday, 10) >= 0 &&
+      parseInt(weekday, 10) <= 6
+    ) {
+      if (parseInt(weekday, 10) === SUNDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE sun_from != ? AND sun_to != ?`;
+        } else {
+          sql = `${sql} AND sun_from != ? AND sun_to != ?`;
+        }
+      } else if (parseInt(weekday, 10) === MONDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE mon_from != ? AND mon_to != ?`;
+        } else {
+          sql = `${sql} AND mon_from != ? AND mon_to != ?`;
+        }
+      } else if (parseInt(weekday, 10) === TUESDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE tue_from != ? AND tue_to != ?`;
+        } else {
+          sql = `${sql} AND tue_from != ? AND tue_to != ?`;
+        }
+      } else if (parseInt(weekday, 10) === WEDENSDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE wed_from != ? AND wed_to != ?`;
+        } else {
+          sql = `${sql} AND wed_from != ? AND wed_to != ?`;
+        }
+      } else if (parseInt(weekday, 10) === THURSDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE thur_from != ? AND thur_to != ?`;
+        } else {
+          sql = `${sql} AND thur_from != ? AND thur_to != ?`;
+        }
+      } else if (parseInt(weekday, 10) === FRIDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE fri_from != ? AND fri_to != ?`;
+        } else {
+          sql = `${sql} AND fri_from != ? AND fri_to != ?`;
+        }
+      } else if (parseInt(weekday, 10) === SATURDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE sat_from != ? AND sat_to != ?`;
+        } else {
+          sql = `${sql} AND sat_from != ? AND sat_to != ?`;
+        }
+      }
+
+      params.push(-1);
+      params.push(-1);
+    }
+
     if (!hasFirstCondition) {
       res.json({ code: -1, message: 'Please give at least one condition' });
 
       return;
     }
-    console.log('MULTIPLE');
   } else if (parseInt(queryType, 10) === MULTIPLE_QUERY_OR) {
     // AND condition
     let hasFirstCondition = false;
@@ -243,12 +430,103 @@ const getRestaurant = async (req, res) => {
       params.push(longitude);
     }
 
+    if (
+      weekday !== undefined &&
+      parseInt(weekday, 10) >= 0 &&
+      parseInt(weekday, 10) <= 6
+    ) {
+      if (parseInt(weekday, 10) === SUNDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE sun_from != ? AND sun_to != ?`;
+        } else {
+          sql = `${sql} OR (sun_from != ? AND sun_to != ?)`;
+        }
+      } else if (parseInt(weekday, 10) === MONDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE mon_from != ? AND mon_to != ?`;
+        } else {
+          sql = `${sql} OR (mon_from != ? AND mon_to != ?)`;
+        }
+      } else if (parseInt(weekday, 10) === TUESDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE tue_from != ? AND tue_to != ?`;
+        } else {
+          sql = `${sql} OR (tue_from != ? AND tue_to != ?)`;
+        }
+      } else if (parseInt(weekday, 10) === WEDENSDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE wed_from != ? AND wed_to != ?`;
+        } else {
+          sql = `${sql} OR (wed_from != ? AND wed_to != ?)`;
+        }
+      } else if (parseInt(weekday, 10) === THURSDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE thur_from != ? AND thur_to != ?`;
+        } else {
+          sql = `${sql} OR (thur_from != ? AND thur_to != ?)`;
+        }
+      } else if (parseInt(weekday, 10) === FRIDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE fri_from != ? AND fri_to != ?`;
+        } else {
+          sql = `${sql} OR (fri_from != ? AND fri_to != ?)`;
+        }
+      } else if (parseInt(weekday, 10) === SATURDAY) {
+        if (!hasFirstCondition) {
+          hasFirstCondition = true;
+          sql = `${sql} WHERE sat_from != ? AND sat_to != ?`;
+        } else {
+          sql = `${sql} OR (sat_from != ? AND sat_to != ?)`;
+        }
+      }
+
+      params.push(-1);
+      params.push(-1);
+    }
+
     if (!hasFirstCondition) {
       res.json({ code: -1, message: 'Please give at least one condition' });
 
       return;
     }
   } else if (parseInt(queryType, 10) === MULTIPLE_QUERY_TIME) {
+    if (
+      weekday !== undefined &&
+      timeFrom !== undefined &&
+      timeTo !== undefined
+    ) {
+      const timeFromTimeStamp = moment
+        .tz(`${DEFAULT_DATE} ${timeFrom}`, 'YYYY/MM/DD HH:mm', TIME_ZONE)
+        .unix();
+      const timeToTimeStamp = moment
+        .tz(`${DEFAULT_DATE} ${timeTo}`, 'YYYY/MM/DD HH:mm', TIME_ZONE)
+        .unix();
+
+      if (parseInt(weekday, 10) === SUNDAY) {
+        sql = `${sql} WHERE sun_from <= ? AND sun_to >= ?`;
+      } else if (parseInt(weekday, 10) === MONDAY) {
+        sql = `${sql} WHERE mon_from <= ? AND mon_to >= ?`;
+      } else if (parseInt(weekday, 10) === TUESDAY) {
+        sql = `${sql} WHERE tue_from <= ? AND tue_to >= ?`;
+      } else if (parseInt(weekday, 10) === WEDENSDAY) {
+        sql = `${sql} WHERE wed_from <= ? AND wed_to >= ?`;
+      } else if (parseInt(weekday, 10) === THURSDAY) {
+        sql = `${sql} WHERE thur_from <= ? AND thur_to >= ?`;
+      } else if (parseInt(weekday, 10) === FRIDAY) {
+        sql = `${sql} WHERE fri_from <= ? AND fri_to >= ?`;
+      } else if (parseInt(weekday, 10) === SATURDAY) {
+        sql = `${sql} WHERE sat_from <= ? AND sat_to >= ?`;
+      }
+
+      params.push(timeFromTimeStamp);
+      params.push(timeToTimeStamp);
+    }
     console.log(queryType);
   } else {
     res.json({ code: -1, message: 'Please give valid query type' });
@@ -262,10 +540,26 @@ const getRestaurant = async (req, res) => {
   console.log(params);
 
   try {
+    const sql1 = `${sql.substring(0, 7)}COUNT(*) as totalCount ${sql.substring(
+      9,
+      sql.length
+    )}`;
+    const totalCount = await mysql.query(sql1, params);
+    console.log(sql1);
     sql = `${sql} limit ${limit} offset ${offset}`;
     const result = await mysql.query(sql, params);
+    const outputResult = adjustOutputResult(result);
 
-    res.json({ code: 0, data: result });
+    if (totalCount[0].totalCount <= 0) {
+      res.status(404).json({ code: -1, message: 'There is no restaurant' });
+
+      return;
+    }
+    res.json({
+      code: 0,
+      totalCount: totalCount[0].totalCount,
+      data: outputResult,
+    });
   } catch (err) {
     res.json({ code: -1, message: `${err}` });
   }
