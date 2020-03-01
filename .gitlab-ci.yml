@@ -1,0 +1,197 @@
+# Predefined variables:
+#   CI_COMMIT_REF_NAME
+#   CI_COMMIT_SHORT_SHA
+#   CI_COMMIT_TAG
+# AWS variables:
+#    AWS_DEFAULT_REGION
+# == PA
+#    AWS_CI_ACCESS_KEY_NON_PROD
+#    AWS_CI_SECRET_NON_PROD
+#    AWS_ECR_PA
+#    AWS_ROLE_CICD_PA
+# == PROD
+#    AWS_CI_ACCESS_KEY_PROD
+#    AWS_CI_SECRET_PROD
+#    AWS_ECR_PROD
+#    AWS_ROLE_CICD_PROD
+
+image: docker:latest
+
+stages:
+  - build
+  - docker
+  - deploy
+
+
+cache:
+  paths:
+    - node_modules/
+
+
+build:
+  stage: build
+  tags:
+    - 1forall
+  image: node:12
+  script:
+    - npm install
+    - npm run clean
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+      - reports/
+
+
+.token_script: &token_before_script
+  before_script:
+    - git clone http://gitlab-ci-token:${CI_JOB_TOKEN}@10.0.1.31/SRE/gitlab-ci.git
+    - cd gitlab-ci; git checkout 80bfe488; cd ..
+    - ./gitlab-ci/scripts/install-tools.sh
+
+
+docker-pa:
+  stage: docker
+  image: docker:stable-git
+  before_script:
+  <<: *token_before_script
+  script:
+    - SEMVER_TAG=$(echo $CI_COMMIT_REF_NAME | cut -d/ -f2)
+    - docker build . -t $AWS_ECR_PA:$CI_COMMIT_SHORT_SHA
+    - docker tag $AWS_ECR_PA:$CI_COMMIT_SHORT_SHA $AWS_ECR_PA:$SEMVER_TAG
+    - $(./gitlab-ci/scripts/aws-switch-role.sh $AWS_CI_ACCESS_KEY_NON_PROD $AWS_CI_SECRET_NON_PROD $AWS_ROLE_CICD_PA aws ecr get-login --no-include-email)
+    - docker push $AWS_ECR_PA:$CI_COMMIT_SHORT_SHA
+    - docker push $AWS_ECR_PA:$SEMVER_TAG
+  only:
+    - /^release\/v(\d+\.)?(\d+\.)?(\d+)/
+  except:
+    - tags
+  tags:
+    - 1forall
+
+deploy-pa:
+  stage: deploy
+  image: docker:stable-git
+  before_script:
+  <<: *token_before_script
+  script:
+    - cd gitlab-ci/scripts
+    - ./aws-switch-role.sh $AWS_CI_ACCESS_KEY_NON_PROD $AWS_CI_SECRET_NON_PROD $AWS_ROLE_CICD_PA ./aws-update-ecs-task-def.sh billing2_pa_billing-engine-dispatcher $CI_COMMIT_SHORT_SHA
+    - ./aws-switch-role.sh $AWS_CI_ACCESS_KEY_NON_PROD $AWS_CI_SECRET_NON_PROD $AWS_ROLE_CICD_PA ./aws-update-ecs-service.sh billing2-pa billing2_pa_billing-engine-dispatcher-int billing2_pa_billing-engine-dispatcher
+  only:
+    - /^release\/v(\d+\.)?(\d+\.)?(\d+)/
+  except:
+    - tags
+  tags:
+    - 1forall
+
+
+docker-pa-sustain:
+  stage: docker
+  image: docker:stable-git
+  before_script:
+  <<: *token_before_script
+  script:
+    - SEMVER_TAG=$(echo $CI_COMMIT_REF_NAME | cut -d/ -f2)
+    - docker build . -t $AWS_ECR_PA:$CI_COMMIT_SHORT_SHA
+    - docker tag $AWS_ECR_PA:$CI_COMMIT_SHORT_SHA $AWS_ECR_PA:$SEMVER_TAG
+    - $(./gitlab-ci/scripts/aws-switch-role.sh $AWS_CI_ACCESS_KEY_NON_PROD $AWS_CI_SECRET_NON_PROD $AWS_ROLE_CICD_PA aws ecr get-login --no-include-email)
+    - docker push $AWS_ECR_PA:$CI_COMMIT_SHORT_SHA
+    - docker push $AWS_ECR_PA:$SEMVER_TAG
+  only:
+    - /^hotfix\/v(\d+\.)?(\d+\.)?(\d+)/
+  except:
+    - tags
+  tags:
+    - 1forall
+
+deploy-pa-sustain:
+  stage: deploy
+  image: docker:stable-git
+  before_script:
+  <<: *token_before_script
+  script:
+    - cd gitlab-ci/scripts
+    - ./aws-switch-role.sh $AWS_CI_ACCESS_KEY_NON_PROD $AWS_CI_SECRET_NON_PROD $AWS_ROLE_CICD_PA ./aws-update-ecs-task-def.sh billing2_pa-sustain_billing-engine-dispatcher $CI_COMMIT_SHORT_SHA
+    - ./aws-switch-role.sh $AWS_CI_ACCESS_KEY_NON_PROD $AWS_CI_SECRET_NON_PROD $AWS_ROLE_CICD_PA ./aws-update-ecs-service.sh billing2-pa billing2_pa-sustain_billing-engine-dispatcher-int billing2_pa-sustain_billing-engine-dispatcher
+  only:
+    - /^hotfix\/v(\d+\.)?(\d+\.)?(\d+)/
+  except:
+    - tags
+  tags:
+    - 1forall
+
+
+docker-prod:
+  stage: docker
+  image: docker:stable-git
+  before_script:
+  <<: *token_before_script
+  script:
+    - $(./gitlab-ci/scripts/aws-switch-role.sh $AWS_CI_ACCESS_KEY_NON_PROD $AWS_CI_SECRET_NON_PROD $AWS_ROLE_CICD_PA aws ecr get-login --no-include-email)
+    - docker pull $AWS_ECR_PA:$CI_COMMIT_TAG
+    - docker tag $AWS_ECR_PA:$CI_COMMIT_TAG $AWS_ECR_PROD:$CI_COMMIT_SHORT_SHA
+    - docker tag $AWS_ECR_PA:$CI_COMMIT_TAG $AWS_ECR_PROD:$CI_COMMIT_TAG
+    - $(./gitlab-ci/scripts/aws-switch-role.sh $AWS_CI_ACCESS_KEY_PROD $AWS_CI_SECRET_PROD $AWS_ROLE_CICD_PROD aws ecr get-login --no-include-email)
+    - docker push $AWS_ECR_PROD:$CI_COMMIT_SHORT_SHA
+    - docker push $AWS_ECR_PROD:$CI_COMMIT_TAG
+  only:
+    - /^v(\d+\.)?(\d+\.)?(\d+)$/
+  except:
+    - branches
+  tags:
+    - 1forall
+
+deploy-prod:
+  stage: deploy
+  image: docker:stable-git
+  before_script:
+  <<: *token_before_script
+  script:
+    - cd gitlab-ci/scripts
+    - ./aws-switch-role.sh $AWS_CI_ACCESS_KEY_PROD $AWS_CI_SECRET_PROD $AWS_ROLE_CICD_PROD ./aws-update-ecs-task-def.sh billing2_prod_billing-engine-dispatcher $CI_COMMIT_SHORT_SHA
+    - ./aws-switch-role.sh $AWS_CI_ACCESS_KEY_PROD $AWS_CI_SECRET_PROD $AWS_ROLE_CICD_PROD ./aws-update-ecs-service.sh billing2-prod billing2_prod_billing-engine-dispatcher-int billing2_prod_billing-engine-dispatcher
+  only:
+    - /^v(\d+\.)?(\d+\.)?(\d+)$/
+  except:
+    - branches
+  tags:
+    - 1forall
+  when: manual
+
+
+docker-prod-hotfix:
+  stage: docker
+  image: docker:stable-git
+  before_script:
+  <<: *token_before_script
+  script:
+    - SEMVER_TAG=$(echo $CI_COMMIT_REF_NAME | cut -d/ -f2)
+    - docker build . -t $AWS_ECR_PROD:$CI_COMMIT_SHORT_SHA
+    - docker tag $AWS_ECR_PROD:$CI_COMMIT_SHORT_SHA $AWS_ECR_PROD:$SEMVER_TAG
+    - $(./gitlab-ci/scripts/aws-switch-role.sh $AWS_CI_ACCESS_KEY_PROD $AWS_CI_SECRET_PROD $AWS_ROLE_CICD_PROD aws ecr get-login --no-include-email)
+    - docker push $AWS_ECR_PROD:$CI_COMMIT_SHORT_SHA
+    - docker push $AWS_ECR_PROD:$SEMVER_TAG
+  only:
+    - /^hotfix\/v(\d+\.)?(\d+\.)?(\d+)-hotfix.(\d+)$/
+  except:
+    - tags
+  tags:
+    - 1forall
+
+deploy-prod-hotfix:
+  stage: deploy
+  image: docker:stable-git
+  before_script:
+  <<: *token_before_script
+  script:
+    - cd gitlab-ci/scripts
+    - ./aws-switch-role.sh $AWS_CI_ACCESS_KEY_PROD $AWS_CI_SECRET_PROD $AWS_ROLE_CICD_PROD ./aws-update-ecs-task-def.sh billing2_prod_billing-engine-dispatcher $CI_COMMIT_TAG
+    - ./aws-switch-role.sh $AWS_CI_ACCESS_KEY_PROD $AWS_CI_SECRET_PROD $AWS_ROLE_CICD_PROD ./aws-update-ecs-service.sh billing2-prod billing2_prod_billing-engine-dispatcher-int billing2_prod_billing-engine-dispatcher
+  only:
+    - /^v(\d+\.)?(\d+\.)?(\d+)-hotfix.(\d+)$/
+  except:
+    - branches
+  tags:
+    - 1forall
+  when: manual

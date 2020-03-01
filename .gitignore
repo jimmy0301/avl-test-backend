@@ -1,0 +1,30 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Dependency directory
+node_modules
+
+# Coverage reports
+coverage/
+
+# Distribution
+dist/
+test-pdf/
+bill_file/
+
+# Environment
+
+
+# Configuration override
+config/local*
+
+# Confidential files
+.ssl/
+
+# DLL manifests
+dll/*.dll.json
+
+reports/
