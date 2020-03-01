@@ -23,6 +23,7 @@ Import some restaurant data and provide the API to search them with some conditi
 - **latitude** - 店家所在地圖的緯度,浮點數
 - **longitude** - 店家所在地圖的經度,浮點數
 - **weekday** - 星期幾, 0:星期天, 1:星期一, 2:星期二, 3:星期三, 4:星期四, 5:星期五, 6:星期六
+- **michilin_start** - 米其林星, 0:無, 1000:推薦, 1:一星, 2:二星, 3:三星
 - **time_from** - 營業開始時間, 格式為 HH:mm, example: 15:30
 - **time_to** - 營業結束時間, 格式為 HH:mm, example: 15:30
 - **offset** - 從第幾筆開始回傳資料, 最小為 0 即第一筆, 預設為 0

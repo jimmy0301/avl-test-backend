@@ -145,6 +145,7 @@ const getRestaurant = async (req, res) => {
     latitude,
     longitude,
     weekday,
+    michelin_star: michelinStar,
     time_from: timeFrom,
     time_to: timeTo,
     offset = 0,
@@ -210,6 +211,16 @@ const getRestaurant = async (req, res) => {
 
       params.push(-1);
       params.push(-1);
+    } else if (
+      michelinStar !== undefined &&
+      (parseInt(michelinStar, 10) === 0 ||
+        parseInt(michelinStar, 10) === 1 ||
+        parseInt(michelinStar, 10) === 2 ||
+        parseInt(michelinStar, 10) === 3 ||
+        parseInt(michelinStar, 10) === 1000)
+    ) {
+      sql = `${sql} WHERE michelin_star = ?`;
+      params.push(parseInt(michelinStar, 10));
     } else {
       res.json({ code: -1, message: 'Please give at least one condition' });
 
@@ -350,6 +361,23 @@ const getRestaurant = async (req, res) => {
       params.push(-1);
     }
 
+    if (
+      michelinStar !== undefined &&
+      (parseInt(michelinStar, 10) === 0 ||
+        parseInt(michelinStar, 10) === 1 ||
+        parseInt(michelinStar, 10) === 2 ||
+        parseInt(michelinStar, 10) === 3 ||
+        parseInt(michelinStar, 10) === 1000)
+    ) {
+      if (!hasFirstCondition) {
+        hasFirstCondition = true;
+        sql = `${sql} WHERE michelin_star = ?`;
+      } else {
+        sql = `${sql} AND michelin_star = ?`;
+      }
+      params.push(parseInt(michelinStar, 10));
+    }
+
     if (!hasFirstCondition) {
       res.json({ code: -1, message: 'Please give at least one condition' });
 
@@ -488,6 +516,23 @@ const getRestaurant = async (req, res) => {
 
       params.push(-1);
       params.push(-1);
+    }
+
+    if (
+      michelinStar !== undefined &&
+      (parseInt(michelinStar, 10) === 0 ||
+        parseInt(michelinStar, 10) === 1 ||
+        parseInt(michelinStar, 10) === 2 ||
+        parseInt(michelinStar, 10) === 3 ||
+        parseInt(michelinStar, 10) === 1000)
+    ) {
+      if (!hasFirstCondition) {
+        hasFirstCondition = true;
+        sql = `${sql} WHERE michelin_star = ?`;
+      } else {
+        sql = `${sql} OR michelin_star = ?`;
+      }
+      params.push(parseInt(michelinStar, 10));
     }
 
     if (!hasFirstCondition) {
