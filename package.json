@@ -47,7 +47,7 @@
     "prop-types": "^15.7.2",
     "pug": "^2.0.4",
     "randomstring": "^1.1.5",
-    "redis": "^2.8.0",
+    "redis": "^3.1.1",
     "reselect": "^3.0.1",
     "serialize-javascript": "^1.7.0",
     "shx": "^0.3.2",
